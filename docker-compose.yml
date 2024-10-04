@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  link-shortener:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: link-shortener
+    restart: always
+    ports:
+      - 7001:7001
+    depends_on:
+      - postgres
+    networks:
+      - link-shortener_network
+      # - nginx_network
+
+  postgres:
+    image: postgres:13
+    container_name: postgres-link-shortener
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      - link-shortener_network
+
+networks:
+  # nginx_network:
+    # external: true
+  link-shortener_network:
+
+volumes:
+  postgres:
+    name: link-shortener-db
