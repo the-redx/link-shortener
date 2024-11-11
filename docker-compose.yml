@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   link-shortener:
     build:
@@ -7,29 +8,19 @@ services:
     container_name: link-shortener
     restart: always
     ports:
-      - 7001:7001
+      - 4000:4000
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb:8000
     depends_on:
-      - postgres
-    networks:
-      - link-shortener_network
-      # - nginx_network
+      - dynamodb
 
-  postgres:
-    image: postgres:13
-    container_name: postgres-link-shortener
-    restart: always
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: local-dynamodb
     ports:
-      - 5432:5432
+      - 8000:8000
     volumes:
-      - postgres:/var/lib/postgresql/data
-    networks:
-      - link-shortener_network
-
-networks:
-  # nginx_network:
-    # external: true
-  link-shortener_network:
+      - dynamodb-data:/home/dynamodblocal/data
 
 volumes:
-  postgres:
-    name: link-shortener-db
+  dynamodb-data:

@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/the-redx/link-shortener/internal/handlers"
@@ -20,13 +18,7 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Load the Shared AWS Configuration (~/.aws/config)
-	cfg, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		log.Fatal("Error loading AWS config")
-	}
-
-	linkService := services.NewLinkService(cfg)
+	linkService := services.NewLinkService()
 	ch := handlers.NewLinkHandler(linkService)
 
 	router := mux.NewRouter()
@@ -37,5 +29,5 @@ func main() {
 	router.HandleFunc("/links/{link_id}", ch.DeleteLink).Methods(http.MethodDelete)
 	router.HandleFunc("/{link_id}", ch.RedirectToLink).Methods(http.MethodGet)
 
-	log.Fatal(http.ListenAndServe(":3030", router))
+	log.Fatal(http.ListenAndServe(":4000", router))
 }

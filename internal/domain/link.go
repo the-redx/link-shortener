@@ -13,14 +13,14 @@ const (
 )
 
 type Link struct {
-	ID          string     `json:"id" dynamo:"ID,hash"`
-	Name        string     `json:"name"`
-	ShortUrl    string     `json:"shortUrl" dynamo:"-"`
-	Url         string     `json:"url"`
-	Status      LinkStatus `json:"status"`
-	DateCreated time.Time  `json:"dateCreated"`
-	DateUpdated time.Time  `json:"dateUpdated"`
-	DateDeleted *time.Time `json:"dateDeleted,omitempty" dynamo:",omitempty"`
+	ID          string     `json:"id" dynamodbav:"ID"`
+	Name        string     `json:"name" dynamodbav:"Name"`
+	ShortUrl    string     `json:"shortUrl" dynamodbav:"ShortUrl"`
+	Url         string     `json:"url" dynamodbav:"Url"`
+	Status      LinkStatus `json:"status" dynamodbav:"Status"`
+	DateCreated time.Time  `json:"dateCreated" dynamodbav:"DateCreated"`
+	DateUpdated time.Time  `json:"dateUpdated" dynamodbav:"DateUpdated"`
+	DateDeleted *time.Time `json:"dateDeleted,omitempty" dynamodbav:"DateDeleted,omitempty"`
 }
 
 type CreateLinkDTO struct {
@@ -30,6 +30,7 @@ type CreateLinkDTO struct {
 }
 
 type UpdateLinkDTO struct {
-	ID   string `json:"id" validate:"max=50"`
-	Name string `json:"name" validate:"min=3,max=100"`
+	Name   string     `json:"name" validate:"min=3,max=100"`
+	Url    string     `json:"url" validate:"url,max=5000"`
+	Status LinkStatus `json:"status"`
 }

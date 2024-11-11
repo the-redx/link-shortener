@@ -1,65 +1,75 @@
 package services
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/guregu/dynamo/v2"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbTypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/pkg/errs"
 )
 
 type LinkService struct {
-	dynamoDB   *dynamo.DB
-	linksTable dynamo.Table
+	dynamoDB *dynamodb.Client
 }
 
-// 1. Find what is ctx
-// 2. Add support for user authentication
+// 1. Add support for user authentication
+// 2. Fix update link method
 
 func (s *LinkService) GetAllLinks() (*[]domain.Link, *errs.AppError) {
-	var links []domain.Link
+	input := &dynamodb.ScanInput{TableName: aws.String("Links")}
 
-	err := s.linksTable.Scan().All(ctx, &links)
+	result, err := s.dynamoDB.Scan(context.TODO(), input)
 	if err != nil {
 		appErr := errs.NewUnexpectedError("Error while fetching links")
 		return nil, appErr
 	}
 
-	for i := 0; i < len(links); i++ {
-		links[i].ShortUrl = createShortUrlFromID(links[i].ID)
+	var links []domain.Link
+	for _, item := range result.Items {
+		var link domain.Link
+		err = attributevalue.UnmarshalMap(item, &link)
+
+		if err == nil {
+			links = append(links, link)
+		}
 	}
 
 	return &links, nil
 }
 
 func (s *LinkService) GetLinkByID(id string) (*domain.Link, *errs.AppError) {
-	var link domain.Link
-
-	err := s.linksTable.Get("ID", id).One(ctx, &link)
+	result, err := s.getItemById(id)
 	if err != nil {
-		appErr := errs.NewNotFoundError("Link not found")
-		return nil, appErr
+		return nil, errs.NewUnexpectedError("Error while fetching link")
 	}
 
-	link.ShortUrl = createShortUrlFromID(link.ID)
+	if result == nil {
+		return nil, errs.NewNotFoundError("Link not found")
+	}
 
-	return &link, nil
+	return result, nil
 }
 
 func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO) (*domain.Link, *errs.AppError) {
-	var link domain.Link
-
 	if linkDTO.ID == "" {
 		linkDTO.ID = generateRandomID()
 	}
 
-	err := s.linksTable.Get("ID", linkDTO.ID).One(ctx, &link)
-	if err == nil && &link != nil {
+	result, err := s.getItemById(linkDTO.ID)
+	if err != nil {
+		return nil, errs.NewUnexpectedError("Error while creating link")
+	}
+
+	if result != nil {
 		return nil, errs.NewBadRequestError("This short URL is already in use")
 	}
 
-	link = domain.Link{
+	link := domain.Link{
 		ID:          linkDTO.ID,
 		Name:        linkDTO.Name,
 		ShortUrl:    createShortUrlFromID(linkDTO.ID),
@@ -70,7 +80,17 @@ func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO) (*domain.Link, *
 		DateDeleted: nil,
 	}
 
-	if err := s.linksTable.Put(link).Run(ctx); err != nil {
+	item, err := attributevalue.MarshalMap(link)
+	if err != nil {
+		return nil, errs.NewUnexpectedError("Error while creating link")
+	}
+
+	putInput := &dynamodb.PutItemInput{
+		TableName: aws.String("Links"),
+		Item:      item,
+	}
+
+	if _, err := s.dynamoDB.PutItem(context.TODO(), putInput); err != nil {
 		return nil, errs.NewUnexpectedError("Error while creating link")
 	}
 
@@ -78,54 +98,114 @@ func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO) (*domain.Link, *
 }
 
 func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO) (*domain.Link, *errs.AppError) {
-	var link domain.Link
-
-	err := s.linksTable.Get("ID", id).One(ctx, &link)
+	result, err := s.getItemById(id)
 	if err != nil {
-		appErr := errs.NewNotFoundError("Link not found")
-		return nil, appErr
+		return nil, errs.NewUnexpectedError("Error while updating link")
 	}
 
-	if linkDTO.ID != "" {
-		link.ID = linkDTO.ID
+	if result == nil {
+		return nil, errs.NewNotFoundError("Link not found")
 	}
 
-	if linkDTO.Name != "" {
-		link.Name = linkDTO.Name
+	name := linkDTO.Name
+	if name == "" {
+		name = result.Name
 	}
 
-	if err = s.linksTable.Update(id, link).Run(ctx); err != nil {
-		appErr := errs.NewUnexpectedError(err.Error())
-		return nil, appErr
+	url := linkDTO.Url
+	if url == "" {
+		url = result.Url
 	}
 
-	link.ShortUrl = createShortUrlFromID(link.ID)
+	status := linkDTO.Status
+	if status == "" {
+		status = result.Status
+	}
+
+	input := &dynamodb.UpdateItemInput{
+		TableName: aws.String("Links"),
+		Key: map[string]dynamodbTypes.AttributeValue{
+			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
+		},
+		UpdateExpression: aws.String("SET Name = :name, Url = :url, Status = :status, DateUpdated = :dateUpdated"),
+		ExpressionAttributeValues: map[string]dynamodbTypes.AttributeValue{
+			":name":        &dynamodbTypes.AttributeValueMemberN{Value: name},
+			":url":         &dynamodbTypes.AttributeValueMemberN{Value: url},
+			":status":      &dynamodbTypes.AttributeValueMemberS{Value: fmt.Sprintf("%s", status)},
+			":dateUpdated": &dynamodbTypes.AttributeValueMemberS{Value: time.Now().String()},
+		},
+		ReturnValues: "ALL_NEW",
+	}
+
+	updatedRes, err := s.dynamoDB.UpdateItem(context.TODO(), input)
+	if err != nil {
+		return nil, errs.NewUnexpectedError("Error while updating link")
+	}
+
+	var link domain.Link
+	err = attributevalue.UnmarshalMap(updatedRes.Attributes, &link)
+	if err != nil {
+		return nil, errs.NewUnexpectedError("Error while updating link")
+	}
+
 	return &link, nil
 }
 
 func (s *LinkService) DeleteLinkByID(id string) (*domain.Link, *errs.AppError) {
 	var link domain.Link
 
-	err := s.linksTable.Get("ID", id).One(ctx, &link)
+	result, err := s.getItemById(id)
 	if err != nil {
-		appErr := errs.NewNotFoundError("Link not found")
-		return nil, appErr
+		return nil, errs.NewUnexpectedError("Error while deleting link")
 	}
 
-	err = s.linksTable.Delete("ID", id).Run(ctx)
-	if err != nil {
-		appErr := errs.NewUnexpectedError(err.Error())
-		return nil, appErr
+	if result == nil {
+		return nil, errs.NewNotFoundError("Link not found")
 	}
 
-	link.ShortUrl = createShortUrlFromID(link.ID)
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String("Links"),
+		Key: map[string]dynamodbTypes.AttributeValue{
+			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
+		},
+	}
+
+	if _, err := s.dynamoDB.DeleteItem(context.TODO(), input); err != nil {
+		appErr := errs.NewUnexpectedError("Error while deleting link")
+		return nil, appErr
+	}
 
 	return &link, nil
 }
 
-func NewLinkService(awsConfig aws.Config) LinkService {
-	dynamoDB := NewDynamoDBService(awsConfig)
-	table := dynamoDB.Table("Links")
+func (s *LinkService) getItemById(id string) (*domain.Link, error) {
+	input := &dynamodb.GetItemInput{
+		TableName: aws.String("Links"),
+		Key: map[string]dynamodbTypes.AttributeValue{
+			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
+		},
+	}
 
-	return LinkService{dynamoDB: dynamoDB, linksTable: table}
+	result, err := s.dynamoDB.GetItem(context.TODO(), input)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Item == nil {
+		return nil, nil
+	}
+
+	var link domain.Link
+	err = attributevalue.UnmarshalMap(result.Item, &link)
+	if err != nil {
+		return nil, err
+	}
+
+	return &link, nil
+}
+
+func NewLinkService() LinkService {
+	dynamoDB := NewDynamoDBService()
+
+	return LinkService{dynamoDB: dynamoDB}
 }

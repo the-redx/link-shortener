@@ -19,8 +19,6 @@ FROM alpine:latest as run
 COPY --from=build /app/link-shortener /app/link-shortener
 
 WORKDIR /app
-EXPOSE 7001
-
-ENV DOMAIN_NAME=https://go.illiashenko.dev
+EXPOSE 4000
 
 CMD ["/link-shortener"]
