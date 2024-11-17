@@ -2,203 +2,116 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	dynamodbTypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/guregu/dynamo/v2"
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/pkg/errs"
 )
 
 type LinkService struct {
-	dynamoDB *dynamodb.Client
+	dynamoDB   *dynamo.DB
+	linksTable dynamo.Table
 }
 
-// 1. Add support for user authentication
-// 2. Fix update link method
-
-func (s *LinkService) GetAllLinks() (*[]domain.Link, *errs.AppError) {
-	input := &dynamodb.ScanInput{TableName: aws.String("Links")}
-
-	result, err := s.dynamoDB.Scan(context.TODO(), input)
-	if err != nil {
-		appErr := errs.NewUnexpectedError("Error while fetching links")
-		return nil, appErr
-	}
-
+func (s *LinkService) GetAllLinks(userId string) (*[]domain.Link, *errs.AppError) {
 	var links []domain.Link
-	for _, item := range result.Items {
-		var link domain.Link
-		err = attributevalue.UnmarshalMap(item, &link)
 
-		if err == nil {
-			links = append(links, link)
-		}
+	if err := s.linksTable.Scan().Filter("'UserId' = ?", userId).All(context.TODO(), &links); err != nil {
+		return nil, errs.NewUnexpectedError("Error while fetching links")
 	}
 
 	return &links, nil
 }
 
-func (s *LinkService) GetLinkByID(id string) (*domain.Link, *errs.AppError) {
-	result, err := s.getItemById(id)
-	if err != nil {
+func (s *LinkService) GetLinkByID(userId, id string) (*domain.Link, *errs.AppError) {
+	var link domain.Link
+
+	if err := s.linksTable.Get("ID", id).One(context.TODO(), &link); err != nil {
+		if err == dynamo.ErrNotFound {
+			return nil, errs.NewNotFoundError("Link not found")
+		}
+
 		return nil, errs.NewUnexpectedError("Error while fetching link")
 	}
 
-	if result == nil {
+	if userId != link.UserId && link.Status != domain.Active {
 		return nil, errs.NewNotFoundError("Link not found")
 	}
 
-	return result, nil
+	return &link, nil
 }
 
-func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO) (*domain.Link, *errs.AppError) {
+func (s *LinkService) CreateLink(userId string, linkDTO *domain.CreateLinkDTO) (*domain.Link, *errs.AppError) {
 	if linkDTO.ID == "" {
 		linkDTO.ID = generateRandomID()
 	}
 
-	result, err := s.getItemById(linkDTO.ID)
-	if err != nil {
-		return nil, errs.NewUnexpectedError("Error while creating link")
+	var link domain.Link
+
+	if err := s.linksTable.Get("ID", linkDTO.ID).One(context.TODO(), &link); err == nil {
+		return nil, errs.NewUnexpectedError("Item is already exists")
 	}
 
-	if result != nil {
-		return nil, errs.NewBadRequestError("This short URL is already in use")
-	}
-
-	link := domain.Link{
+	link = domain.Link{
 		ID:          linkDTO.ID,
 		Name:        linkDTO.Name,
+		UserId:      userId,
 		ShortUrl:    createShortUrlFromID(linkDTO.ID),
 		Url:         linkDTO.Url,
-		Status:      "active",
+		Status:      domain.Active,
 		DateCreated: time.Now(),
 		DateUpdated: time.Now(),
-		DateDeleted: nil,
 	}
 
-	item, err := attributevalue.MarshalMap(link)
-	if err != nil {
-		return nil, errs.NewUnexpectedError("Error while creating link")
-	}
-
-	putInput := &dynamodb.PutItemInput{
-		TableName: aws.String("Links"),
-		Item:      item,
-	}
-
-	if _, err := s.dynamoDB.PutItem(context.TODO(), putInput); err != nil {
+	if err := s.linksTable.Put(link).Run(context.TODO()); err != nil {
 		return nil, errs.NewUnexpectedError("Error while creating link")
 	}
 
 	return &link, nil
 }
 
-func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO) (*domain.Link, *errs.AppError) {
-	result, err := s.getItemById(id)
-	if err != nil {
-		return nil, errs.NewUnexpectedError("Error while updating link")
-	}
+func (s *LinkService) UpdateLinkByID(userId, id string, linkDTO *domain.UpdateLinkDTO) (*domain.Link, *errs.AppError) {
+	var link domain.Link
 
-	if result == nil {
-		return nil, errs.NewNotFoundError("Link not found")
+	if err := s.linksTable.Get("ID", id).Range("UserId", dynamo.Equal, userId).One(context.TODO(), &link); err != nil {
+		if err == dynamo.ErrNotFound {
+			return nil, errs.NewNotFoundError("Link not found")
+		}
+
+		return nil, errs.NewUnexpectedError("Error while fetching link")
 	}
 
 	name := linkDTO.Name
 	if name == "" {
-		name = result.Name
-	}
-
-	url := linkDTO.Url
-	if url == "" {
-		url = result.Url
+		name = link.Name
 	}
 
 	status := linkDTO.Status
 	if status == "" {
-		status = result.Status
+		status = link.Status
 	}
 
-	input := &dynamodb.UpdateItemInput{
-		TableName: aws.String("Links"),
-		Key: map[string]dynamodbTypes.AttributeValue{
-			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
-		},
-		UpdateExpression: aws.String("SET Name = :name, Url = :url, Status = :status, DateUpdated = :dateUpdated"),
-		ExpressionAttributeValues: map[string]dynamodbTypes.AttributeValue{
-			":name":        &dynamodbTypes.AttributeValueMemberN{Value: name},
-			":url":         &dynamodbTypes.AttributeValueMemberN{Value: url},
-			":status":      &dynamodbTypes.AttributeValueMemberS{Value: fmt.Sprintf("%s", status)},
-			":dateUpdated": &dynamodbTypes.AttributeValueMemberS{Value: time.Now().String()},
-		},
-		ReturnValues: "ALL_NEW",
-	}
-
-	updatedRes, err := s.dynamoDB.UpdateItem(context.TODO(), input)
-	if err != nil {
-		return nil, errs.NewUnexpectedError("Error while updating link")
-	}
-
-	var link domain.Link
-	err = attributevalue.UnmarshalMap(updatedRes.Attributes, &link)
-	if err != nil {
+	if err := s.linksTable.Update("ID", id).Set("name", name).Set("Status", status).Set("DateUpdated", time.Now()).Run(context.TODO()); err != nil {
 		return nil, errs.NewUnexpectedError("Error while updating link")
 	}
 
 	return &link, nil
 }
 
-func (s *LinkService) DeleteLinkByID(id string) (*domain.Link, *errs.AppError) {
+func (s *LinkService) DeleteLinkByID(userId, id string) (*domain.Link, *errs.AppError) {
 	var link domain.Link
 
-	result, err := s.getItemById(id)
-	if err != nil {
+	if err := s.linksTable.Get("ID", id).Range("UserId", dynamo.Equal, userId).One(context.TODO(), &link); err != nil {
+		if err == dynamo.ErrNotFound {
+			return nil, errs.NewNotFoundError("Link not found")
+		}
+
+		return nil, errs.NewUnexpectedError("Error while fetching link")
+	}
+
+	if err := s.linksTable.Delete("ID", id).Run(context.TODO()); err != nil {
 		return nil, errs.NewUnexpectedError("Error while deleting link")
-	}
-
-	if result == nil {
-		return nil, errs.NewNotFoundError("Link not found")
-	}
-
-	input := &dynamodb.DeleteItemInput{
-		TableName: aws.String("Links"),
-		Key: map[string]dynamodbTypes.AttributeValue{
-			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
-		},
-	}
-
-	if _, err := s.dynamoDB.DeleteItem(context.TODO(), input); err != nil {
-		appErr := errs.NewUnexpectedError("Error while deleting link")
-		return nil, appErr
-	}
-
-	return &link, nil
-}
-
-func (s *LinkService) getItemById(id string) (*domain.Link, error) {
-	input := &dynamodb.GetItemInput{
-		TableName: aws.String("Links"),
-		Key: map[string]dynamodbTypes.AttributeValue{
-			"ID": &dynamodbTypes.AttributeValueMemberS{Value: id},
-		},
-	}
-
-	result, err := s.dynamoDB.GetItem(context.TODO(), input)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.Item == nil {
-		return nil, nil
-	}
-
-	var link domain.Link
-	err = attributevalue.UnmarshalMap(result.Item, &link)
-	if err != nil {
-		return nil, err
 	}
 
 	return &link, nil
@@ -206,6 +119,7 @@ func (s *LinkService) getItemById(id string) (*domain.Link, error) {
 
 func NewLinkService() LinkService {
 	dynamoDB := NewDynamoDBService()
+	table := dynamoDB.Table("Links")
 
-	return LinkService{dynamoDB: dynamoDB}
+	return LinkService{dynamoDB: dynamoDB, linksTable: table}
 }

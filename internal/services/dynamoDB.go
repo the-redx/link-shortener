@@ -8,10 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/guregu/dynamo/v2"
 )
 
-func NewDynamoDBService() *dynamodb.Client {
+func NewDynamoDBService() *dynamo.DB {
 	dynamoEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -32,7 +32,5 @@ func NewDynamoDBService() *dynamodb.Client {
 		log.Fatal("Error loading AWS config")
 	}
 
-	db := dynamodb.NewFromConfig(cfg)
-
-	return db
+	return dynamo.New(cfg)
 }

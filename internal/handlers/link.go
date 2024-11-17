@@ -21,16 +21,9 @@ func (ch *LinkHandler) RedirectToLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	linkId := vars["link_id"]
 
-	link, err := ch.service.GetLinkByID(linkId)
-
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
-	if link.Status != domain.Active {
-		err := errs.NewNotFoundError("Link is not found")
-		writeError(w, err)
+	link, appErr := ch.service.GetLinkByID("", linkId)
+	if appErr != nil {
+		writeError(w, appErr)
 		return
 	}
 
@@ -38,9 +31,15 @@ func (ch *LinkHandler) RedirectToLink(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ch *LinkHandler) GetAllLinks(w http.ResponseWriter, r *http.Request) {
-	links, err := ch.service.GetAllLinks()
-	if err != nil {
-		writeError(w, err)
+	userId, appErr := getUserIdFromContext(r)
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
+	links, appErr := ch.service.GetAllLinks(userId)
+	if appErr != nil {
+		writeError(w, appErr)
 		return
 	}
 
@@ -51,9 +50,15 @@ func (ch *LinkHandler) GetLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	linkId := vars["link_id"]
 
-	link, err := ch.service.GetLinkByID(linkId)
-	if err != nil {
-		writeError(w, err)
+	userId, appErr := getUserIdFromContext(r)
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
+	link, appErr := ch.service.GetLinkByID(userId, linkId)
+	if appErr != nil {
+		writeError(w, appErr)
 		return
 	}
 
@@ -63,21 +68,25 @@ func (ch *LinkHandler) GetLink(w http.ResponseWriter, r *http.Request) {
 func (ch *LinkHandler) CreateLink(w http.ResponseWriter, r *http.Request) {
 	var link domain.CreateLinkDTO
 
+	userId, appErr := getUserIdFromContext(r)
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
 	err := json.NewDecoder(r.Body).Decode(&link)
 	if err != nil {
-		appErr := errs.NewBadRequestError("Invalid link data")
-		writeError(w, appErr)
+		writeError(w, errs.NewBadRequestError("Invalid link data"))
 		return
 	}
 
 	err = validate.Struct(link)
 	if err != nil {
-		appErr := errs.NewBadRequestError(err.Error())
-		writeError(w, appErr)
+		writeError(w, errs.NewBadRequestError(err.Error()))
 		return
 	}
 
-	newLink, appErr := ch.service.CreateLink(&link)
+	newLink, appErr := ch.service.CreateLink(userId, &link)
 	if appErr != nil {
 		writeError(w, appErr)
 		return
@@ -92,21 +101,25 @@ func (ch *LinkHandler) UpdateLink(w http.ResponseWriter, r *http.Request) {
 
 	var link domain.UpdateLinkDTO
 
+	userId, appErr := getUserIdFromContext(r)
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
 	err := json.NewDecoder(r.Body).Decode(&link)
 	if err != nil {
-		appErr := errs.NewBadRequestError("Invalid body")
-		writeError(w, appErr)
+		writeError(w, errs.NewBadRequestError("Invalid body"))
 		return
 	}
 
 	err = validate.Struct(link)
 	if err != nil {
-		appErr := errs.NewBadRequestError(err.Error())
-		writeError(w, appErr)
+		writeError(w, errs.NewBadRequestError(err.Error()))
 		return
 	}
 
-	newLink, appErr := ch.service.UpdateLinkByID(linkId, &link)
+	newLink, appErr := ch.service.UpdateLinkByID(userId, linkId, &link)
 	if appErr != nil {
 		writeError(w, appErr)
 		return
@@ -119,7 +132,13 @@ func (ch *LinkHandler) DeleteLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	linkId := vars["link_id"]
 
-	link, appErr := ch.service.DeleteLinkByID(linkId)
+	userId, appErr := getUserIdFromContext(r)
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
+	link, appErr := ch.service.DeleteLinkByID(userId, linkId)
 	if appErr != nil {
 		writeError(w, appErr)
 		return

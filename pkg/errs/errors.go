@@ -18,3 +18,7 @@ func NewUnexpectedError(message string) *AppError {
 func NewBadRequestError(message string) *AppError {
 	return &AppError{http.StatusBadRequest, message}
 }
+
+func NewForbiddenError(message string) *AppError {
+	return &AppError{http.StatusForbidden, message}
+}
