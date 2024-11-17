@@ -19,12 +19,3 @@ func writeResponse(w http.ResponseWriter, code int, data interface{}) {
 func writeError(w http.ResponseWriter, appErr *errs.AppError) {
 	writeResponse(w, appErr.Code, appErr)
 }
-
-func getUserIdFromContext(r *http.Request) (string, *errs.AppError) {
-	userId, ok := r.Context().Value("UserID").(string)
-	if !ok {
-		return "", errs.NewForbiddenError("Authentication error")
-	}
-
-	return userId, nil
-}

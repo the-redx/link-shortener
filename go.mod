@@ -8,17 +8,18 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.32.4
 	github.com/aws/aws-sdk-go-v2/config v1.27.23
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.23
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.15.15
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/guregu/dynamo/v2 v2.2.1
 	github.com/itchyny/base58-go v0.2.2
 	github.com/joho/godotenv v1.5.1
+	github.com/rs/xid v1.6.0
 	go.uber.org/zap v1.27.0
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.15.15 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.23 // indirect
