@@ -1,14 +1,29 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
-	_ "github.com/joho/godotenv/autoload"
+	"github.com/joho/godotenv"
 	"github.com/the-redx/link-shortener/internal/handlers"
 	"github.com/the-redx/link-shortener/internal/services"
 	"github.com/the-redx/link-shortener/pkg/utils"
 )
+
+func init() {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Println("Error loading .env file")
+	}
+
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "production" {
+		if err := godotenv.Overload(".env.production"); err != nil {
+			log.Println("Error loading .env.production file")
+		}
+	}
+}
 
 func main() {
 	defer utils.Logger.Sync()
