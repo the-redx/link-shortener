@@ -26,8 +26,8 @@ func init() {
 	zapConfig.Level = zap.NewAtomicLevelAt(getLevelLogger(appLogLevel))
 	zapConfig.Development = appEnv == "development"
 	zapConfig.Encoding = "json"
-	zapConfig.OutputPaths = []string{"stdout", "./logs/app.log"}
-	zapConfig.ErrorOutputPaths = []string{"stderr", "./logs/app-errors.log"}
+	zapConfig.OutputPaths = []string{"stdout"}
+	zapConfig.ErrorOutputPaths = []string{"stderr"}
 
 	logger, err := zapConfig.Build()
 	if err != nil {

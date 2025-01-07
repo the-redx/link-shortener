@@ -32,7 +32,7 @@ func NewDynamoDBService() *dynamo.DB {
 		utils.Logger.Fatal("Error loading AWS config")
 	}
 
-	utils.Logger.Debugf("DynamoDB config loaded: Dynamo endpoint: %s")
+	utils.Logger.Debugf("DynamoDB config loaded: Dynamo endpoint: %s", dynamoEndpoint)
 
 	return dynamo.New(cfg)
 }

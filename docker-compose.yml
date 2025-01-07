@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: on-failure
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb:8000
     ports:
       - 4000:4000
     depends_on:
