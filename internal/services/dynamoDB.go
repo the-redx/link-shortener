@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,10 +29,10 @@ func NewDynamoDBService() *dynamo.DB {
 	)
 
 	if err != nil {
-		log.Fatal("Error loading AWS config")
+		utils.Logger.Fatal("Error loading AWS config")
 	}
 
-	utils.Logger.Debug("DynamoDB config loaded", dynamoEndpoint)
+	utils.Logger.Debugf("DynamoDB config loaded: Dynamo endpoint: %s")
 
 	return dynamo.New(cfg)
 }

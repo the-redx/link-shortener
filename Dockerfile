@@ -1,21 +1,22 @@
-FROM golang:latest as build
+FROM golang:1.22.0 AS build
 
 WORKDIR /app
 
-COPY go.mod go.sum /app/
+COPY go.mod /app
+COPY go.sum /app
+COPY .env /app
 RUN go mod download
 
 COPY . /app
 
-RUN go build -o link-shortener ./cmd/link-shortener
+RUN go build -o shortener ./cmd/link-shortener
 
-FROM alpine:latest as prod
+FROM golang:1.22.0 AS prod
 
 WORKDIR /app
-COPY --from=build /app/link-shortener /app/
+COPY --from=build /app/shortener /app
+COPY --from=build /app/.env /app
 
 EXPOSE 4000
 
-RUN ./link-shortener
-
-CMD ["/app/link-shortener"]
+CMD ["/app/shortener"]

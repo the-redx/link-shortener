@@ -63,7 +63,7 @@ func (s *LinkService) GetLinkByIDForRedirect(id string, ctx context.Context) (*d
 		return nil, appErr
 	}
 
-	logger.Debug("Link status", zap.Any("Status", link.Status))
+	logger.Debugf("Link status: %s", link.Status)
 
 	if link.Status != domain.Active {
 		logger.Debug("Link is not active")

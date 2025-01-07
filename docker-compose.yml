@@ -1,16 +1,13 @@
 version: '3.8'
 
 services:
-  link-shortener:
+  shortener:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: link-shortener
     restart: on-failure
     ports:
       - 4000:4000
-    environment:
-      - DYNAMODB_ENDPOINT=http://dynamodb:8000
     depends_on:
       - dynamodb
     networks:

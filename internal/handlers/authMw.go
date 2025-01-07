@@ -18,7 +18,7 @@ func AuthMW(next http.HandlerFunc) http.HandlerFunc {
 		userId := r.Header.Get("X-User-ID")
 		userId = strings.TrimSpace(userId)
 
-		logger.Debug("Auth middleware", zap.String("userId", userId))
+		logger.Debugf("Auth middleware: User ID: %s", userId)
 
 		if userId == "" {
 			logger.Debug("Authentication error")

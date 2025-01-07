@@ -25,6 +25,8 @@ func LogMW(next http.Handler) http.Handler {
 		log := utils.Logger.With(zap.String(traceIDKey, traceID))
 		ctx = context.WithValue(ctx, loggerKey, log)
 
+		log.Debugf("Request: %s %s", r.Method, r.URL.Path)
+
 		w.Header().Add("X-Trace-ID", traceID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
