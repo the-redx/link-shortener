@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/golang-cz/nilslice"
 	"github.com/the-redx/link-shortener/pkg/errs"
 )
 
@@ -11,7 +12,7 @@ func writeResponse(w http.ResponseWriter, code int, data interface{}) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(code)
 
-	if err := json.NewEncoder(w).Encode(data); err != nil {
+	if err := json.NewEncoder(w).Encode(nilslice.Initialize(data)); err != nil {
 		panic(err)
 	}
 }

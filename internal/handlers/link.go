@@ -21,13 +21,13 @@ func (ch *LinkHandler) RedirectToLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	linkId := vars["link_id"]
 
-	link, appErr := ch.service.GetLinkByID(linkId, r.Context())
+	link, appErr := ch.service.GetLinkByIDForRedirect(linkId, r.Context())
 	if appErr != nil {
 		writeError(w, appErr)
 		return
 	}
 
-	http.Redirect(w, r, link.Url, http.StatusPermanentRedirect)
+	http.Redirect(w, r, link.Url, http.StatusTemporaryRedirect)
 }
 
 func (ch *LinkHandler) GetAllLinks(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +37,9 @@ func (ch *LinkHandler) GetAllLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, links)
+	writeResponse(w, http.StatusOK, struct {
+		Links *[]domain.Link `json:"links"`
+	}{Links: links})
 }
 
 func (ch *LinkHandler) GetLink(w http.ResponseWriter, r *http.Request) {

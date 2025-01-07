@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/guregu/dynamo/v2"
+	"github.com/the-redx/link-shortener/pkg/utils"
 )
 
 func NewDynamoDBService() *dynamo.DB {
@@ -32,5 +33,15 @@ func NewDynamoDBService() *dynamo.DB {
 		log.Fatal("Error loading AWS config")
 	}
 
+	utils.Logger.Debug("DynamoDB config loaded", dynamoEndpoint)
+
 	return dynamo.New(cfg)
+}
+
+func GetOrCreateTable(db *dynamo.DB, tableName string, from interface{}) dynamo.Table {
+	if err := db.CreateTable(tableName, from).Run(context.TODO()); err != nil {
+		utils.Logger.Info(err)
+	}
+
+	return db.Table(tableName)
 }

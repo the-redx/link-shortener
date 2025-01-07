@@ -6,21 +6,29 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: link-shortener
-    restart: always
+    restart: on-failure
     ports:
       - 4000:4000
     environment:
       - DYNAMODB_ENDPOINT=http://dynamodb:8000
     depends_on:
       - dynamodb
+    networks:
+      - app-network
 
   dynamodb:
     image: amazon/dynamodb-local
-    container_name: local-dynamodb
+    container_name: dynamodb
     ports:
       - 8000:8000
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
+    networks:
+      - app-network
 
 volumes:
   dynamodb-data:
+
+networks:
+  app-network:
+    driver: bridge

@@ -4,19 +4,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/the-redx/link-shortener/internal/handlers"
 	"github.com/the-redx/link-shortener/internal/services"
 	"github.com/the-redx/link-shortener/pkg/utils"
 )
-
-func init() {
-	err := godotenv.Load()
-
-	if err != nil {
-		panic("Error loading .env file")
-	}
-}
 
 func main() {
 	defer utils.Logger.Sync()

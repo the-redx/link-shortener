@@ -2,23 +2,20 @@ FROM golang:latest as build
 
 WORKDIR /app
 
-# Copy the Go module files
-COPY go.mod /app
-COPY go.sum /app
-
-# Download the Go module dependencies
+COPY go.mod go.sum /app/
 RUN go mod download
 
 COPY . /app
 
-RUN go build -o /app/link-shortener
- 
-FROM alpine:latest as run
+RUN go build -o link-shortener ./cmd/link-shortener
 
-# Copy the application executable from the build image
-COPY --from=build /app/link-shortener /app/link-shortener
+FROM alpine:latest as prod
 
 WORKDIR /app
+COPY --from=build /app/link-shortener /app/
+
 EXPOSE 4000
 
-CMD ["/link-shortener"]
+RUN ./link-shortener
+
+CMD ["/app/link-shortener"]

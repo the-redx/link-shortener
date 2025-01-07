@@ -2,11 +2,15 @@ package services
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/guregu/dynamo/v2"
+	"github.com/rs/xid"
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/pkg/errs"
+	"github.com/the-redx/link-shortener/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -23,9 +27,9 @@ func (s *LinkService) GetAllLinks(ctx context.Context) (*[]domain.Link, *errs.Ap
 		return &links, nil
 	}
 
-	logger := ctx.Value("Logger").(*zap.Logger)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	if err := s.linksTable.Scan().Filter("'UserId' = ?", userId).All(context.TODO(), &links); err != nil {
+	if err := s.linksTable.Scan().Filter("'UserId' = ? AND 'Status' = ?", userId, "active").All(context.TODO(), &links); err != nil {
 		logger.Debug("Error while fetching links", zap.Error(err))
 		return nil, errs.NewUnexpectedError("Error while fetching links")
 	}
@@ -35,56 +39,77 @@ func (s *LinkService) GetAllLinks(ctx context.Context) (*[]domain.Link, *errs.Ap
 }
 
 func (s *LinkService) GetLinkByID(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
-	var link domain.Link
-
 	userId, ok := ctx.Value("UserID").(string)
-	logger := ctx.Value("Logger").(*zap.Logger)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	if err := s.linksTable.Get("ID", id).One(context.TODO(), &link); err != nil {
-		logger.Debug("Error while fetching link", zap.Error(err))
-
-		if err == dynamo.ErrNotFound {
-			return nil, errs.NewNotFoundError("Link not found")
-		}
-
-		return nil, errs.NewUnexpectedError("Error while fetching link")
+	link, appErr := s.getLinkByID(id, ctx)
+	if appErr != nil {
+		return nil, appErr
 	}
 
-	logger.Debug("Result", zap.Any("link", link))
-
-	if (!ok || userId != link.UserId) && link.Status != domain.Active {
+	if !ok || userId != link.UserId {
 		logger.Debug("User is not a owner and link is not active")
+		return nil, errs.NewForbiddenError("You don't have access to this link")
+	}
+
+	return link, nil
+}
+
+func (s *LinkService) GetLinkByIDForRedirect(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
+
+	link, appErr := s.getLinkByID(id, ctx)
+	if appErr != nil {
+		return nil, appErr
+	}
+
+	logger.Debug("Link status", zap.Any("Status", link.Status))
+
+	if link.Status != domain.Active {
+		logger.Debug("Link is not active")
 		return nil, errs.NewNotFoundError("Link not found")
 	}
 
-	return &link, nil
+	// Increment the Redirects counter
+	if err := s.linksTable.Update("ID", id).Set("Redirects", link.Redirects+1).Run(context.TODO()); err != nil {
+		logger.Debug("Error while updating the link", zap.Error(err))
+	}
+
+	return link, nil
 }
 
 func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO, ctx context.Context) (*domain.Link, *errs.AppError) {
 	var link domain.Link
 
 	userId, ok := ctx.Value("UserID").(string)
-	logger := ctx.Value("Logger").(*zap.Logger)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
 	if !ok {
 		logger.Debug("Error while fetching user id")
 		return nil, errs.NewUnexpectedError("Error while fetching user id")
 	}
 
-	if linkDTO.ID == "" {
-		linkDTO.ID = generateRandomID()
+	re := regexp.MustCompile(`[^\d\p{Latin}- ]`)
+	linkID := re.ReplaceAllString(linkDTO.ID, "")
+	linkID = strings.ReplaceAll(strings.Trim(linkID, " "), " ", "-")
+
+	if linkID == "" {
+		linkID = xid.New().String()
+		utils.Logger.Debug("Empty link ID. Use generated ID")
 	}
 
-	if err := s.linksTable.Get("ID", linkDTO.ID).One(context.TODO(), &link); err == nil {
+	utils.Logger.Debug(zap.String("linkID", linkID))
+
+	if err := s.linksTable.Get("ID", linkID).One(context.TODO(), &link); err == nil {
 		logger.Debug("Item is already exists")
 		return nil, errs.NewUnexpectedError("Item is already exists")
 	}
 
 	link = domain.Link{
-		ID:          linkDTO.ID,
+		ID:          linkID,
 		Name:        linkDTO.Name,
 		UserId:      userId,
-		ShortUrl:    createShortUrlFromID(linkDTO.ID),
+		ShortUrl:    createShortUrlFromID(linkID),
 		Url:         linkDTO.Url,
 		Status:      domain.Active,
 		DateCreated: time.Now(),
@@ -103,23 +128,17 @@ func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO, ctx context.Cont
 }
 
 func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO, ctx context.Context) (*domain.Link, *errs.AppError) {
-	var link domain.Link
+	userId := ctx.Value("UserID").(string)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	userId, ok := ctx.Value("UserID").(string)
-	logger := ctx.Value("Logger").(*zap.Logger)
-
-	if !ok {
-		logger.Debug("Error while fetching user id")
-		return nil, errs.NewUnexpectedError("Error while fetching user id")
+	link, appErr := s.getLinkByID(id, ctx)
+	if appErr != nil {
+		return nil, appErr
 	}
 
-	if err := s.linksTable.Get("ID", id).Range("UserId", dynamo.Equal, userId).One(context.TODO(), &link); err != nil {
-		logger.Debug("Error while fetching link", zap.Error(err))
-		if err == dynamo.ErrNotFound {
-			return nil, errs.NewNotFoundError("Link not found")
-		}
-
-		return nil, errs.NewUnexpectedError("Error while fetching link")
+	if link.UserId != userId {
+		logger.Debug("User is not a owner")
+		return nil, errs.NewForbiddenError("You don't have access to this link")
 	}
 
 	name := linkDTO.Name
@@ -134,34 +153,33 @@ func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO, c
 
 	logger.Debug("Link to update", zap.Any("link", link))
 
-	if err := s.linksTable.Update("ID", id).Set("name", name).Set("Status", status).Set("DateUpdated", time.Now()).Run(context.TODO()); err != nil {
+	if err := s.linksTable.Update("ID", id).Set("Name", name).Set("Status", status).Set("DateUpdated", time.Now().UTC().Format(time.RFC3339)).Run(context.TODO()); err != nil {
 		logger.Debug("Error while updating the link", zap.Error(err))
 		return nil, errs.NewUnexpectedError("Error while updating link")
 	}
 
 	logger.Debug("Link updated", zap.Any("link", link))
-	return &link, nil
+
+	link, appErr = s.getLinkByID(id, ctx)
+	if appErr != nil {
+		return nil, appErr
+	}
+
+	return link, nil
 }
 
 func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
-	var link domain.Link
+	userId := ctx.Value("UserID").(string)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	userId, ok := ctx.Value("UserID").(string)
-	logger := ctx.Value("Logger").(*zap.Logger)
-
-	if !ok {
-		logger.Debug("Error while fetching user id")
-		return nil, errs.NewUnexpectedError("Error while fetching user id")
+	link, appErr := s.getLinkByID(id, ctx)
+	if appErr != nil {
+		return nil, appErr
 	}
 
-	if err := s.linksTable.Get("ID", id).Range("UserId", dynamo.Equal, userId).One(context.TODO(), &link); err != nil {
-		logger.Debug("Error while fetching link", zap.Error(err))
-
-		if err == dynamo.ErrNotFound {
-			return nil, errs.NewNotFoundError("Link not found")
-		}
-
-		return nil, errs.NewUnexpectedError("Error while fetching link")
+	if link.UserId != userId {
+		logger.Debug("User is not a owner")
+		return nil, errs.NewForbiddenError("You don't have access to this link")
 	}
 
 	if err := s.linksTable.Delete("ID", id).Run(context.TODO()); err != nil {
@@ -170,12 +188,30 @@ func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Li
 	}
 
 	logger.Debug("Link deleted", zap.Any("link", link))
+	return link, nil
+}
+
+func (s *LinkService) getLinkByID(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
+	var link domain.Link
+
+	if err := s.linksTable.Get("ID", id).One(context.TODO(), &link); err != nil {
+		if err == dynamo.ErrNotFound {
+			logger.Debug("Link not found")
+			return nil, errs.NewNotFoundError("Link not found")
+		}
+
+		logger.Debug("Error while fetching link", zap.Error(err))
+		return nil, errs.NewUnexpectedError("Error while fetching link")
+	}
+
+	logger.Debug("Link fetched", zap.Any("link", link))
 	return &link, nil
 }
 
 func NewLinkService() LinkService {
 	dynamoDB := NewDynamoDBService()
-	table := dynamoDB.Table("Links")
+	table := GetOrCreateTable(dynamoDB, "Links", domain.Link{})
 
 	return LinkService{dynamoDB: dynamoDB, linksTable: table}
 }

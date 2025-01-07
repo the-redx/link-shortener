@@ -13,7 +13,7 @@ var userIdKey = "UserID"
 
 func AuthMW(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger := r.Context().Value("Logger").(*zap.Logger)
+		logger := r.Context().Value("Logger").(*zap.SugaredLogger)
 
 		userId := r.Header.Get("X-User-ID")
 		userId = strings.TrimSpace(userId)
