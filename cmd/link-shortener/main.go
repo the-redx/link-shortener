@@ -4,15 +4,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/the-redx/link-shortener/internal/handlers"
 	"github.com/the-redx/link-shortener/internal/services"
 	"github.com/the-redx/link-shortener/pkg/utils"
+	"golang.org/x/exp/rand"
 )
 
 func init() {
+	rand.Seed(uint64(time.Now().UnixNano()))
 	appEnv := os.Getenv("APP_ENV")
 	if appEnv == "" {
 		os.Setenv("APP_ENV", "development")

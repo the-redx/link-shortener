@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/guregu/dynamo/v2"
-	"github.com/rs/xid"
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/pkg/errs"
 	"github.com/the-redx/link-shortener/pkg/utils"
@@ -98,7 +97,7 @@ func (s *LinkService) CreateLink(linkDTO *domain.CreateLinkDTO, ctx context.Cont
 	linkID = strings.ReplaceAll(strings.Trim(linkID, " "), " ", "-")
 
 	if linkID == "" {
-		linkID = xid.New().String()
+		linkID = utils.RandomShortUrl(6)
 		utils.Logger.Debug("Empty link ID. Use generated ID")
 	}
 
