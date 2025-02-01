@@ -4,43 +4,55 @@ import (
 	"context"
 	"os"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/guregu/dynamo/v2"
 	"github.com/the-redx/link-shortener/pkg/utils"
 )
 
 func NewDynamoDBService() *dynamo.DB {
+	environment := os.Getenv("APP_ENV")
 	dynamoEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion("us-east-1"),
-		config.WithEndpointResolver(aws.EndpointResolverFunc(
-			func(service, region string) (aws.Endpoint, error) {
-				return aws.Endpoint{URL: dynamoEndpoint}, nil
-			})),
-		config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
-			Value: aws.Credentials{
-				AccessKeyID: "dummy", SecretAccessKey: "dummy", SessionToken: "dummy",
-				Source: "Hard-coded credentials; values are irrelevant for local DynamoDB",
-			},
-		}),
-	)
-
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("eu-north-1"))
 	if err != nil {
 		utils.Logger.Fatal("Error loading AWS config")
 	}
 
-	utils.Logger.Debugf("DynamoDB config loaded: Dynamo endpoint: %s", dynamoEndpoint)
+	utils.Logger.Debug("DynamoDB config created")
 
-	return dynamo.New(cfg)
+	return dynamo.New(cfg, func(o *dynamodb.Options) {
+		if environment == "development" && dynamoEndpoint != "" {
+			utils.Logger.Debugf("DynamoDB base endpoint is set to %s", dynamoEndpoint)
+			o.BaseEndpoint = &dynamoEndpoint
+		}
+	})
 }
 
 func GetOrCreateTable(db *dynamo.DB, tableName string, from interface{}) dynamo.Table {
-	if err := db.CreateTable(tableName, from).Run(context.TODO()); err != nil {
-		utils.Logger.Info(err)
+	utils.Logger.Debugf("Checking if table %s exists", tableName)
+
+	tables, err := db.ListTables().All(context.TODO())
+	if err != nil {
+		utils.Logger.Panic(err)
 	}
+
+	utils.Logger.Debugf("Tables: %v", tables)
+
+	for _, table := range tables {
+		if table == tableName {
+			utils.Logger.Debug("Table found")
+			return db.Table(tableName)
+		}
+	}
+
+	utils.Logger.Debug("Table not found. Creating...")
+
+	if err := db.CreateTable(tableName, from).Run(context.TODO()); err != nil {
+		utils.Logger.Panic(err)
+	}
+
+	utils.Logger.Debug("Table created")
 
 	return db.Table(tableName)
 }

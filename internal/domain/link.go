@@ -15,7 +15,7 @@ type Link struct {
 	ID          string     `json:"id" dynamo:"ID,hash"`
 	Name        string     `json:"name" dynamo:"Name"`
 	UserId      string     `json:"-" dynamo:"UserId"`
-	ShortUrl    string     `json:"shortUrl" dynamo:"ShortUrl"`
+	ShortUrl    string     `json:"shortUrl" dynamo:"-"`
 	Redirects   int        `json:"redirects" dynamo:"Redirects"`
 	Url         string     `json:"url" dynamo:"Url"`
 	Status      LinkStatus `json:"status" dynamo:"Status"`
@@ -25,7 +25,7 @@ type Link struct {
 
 type CreateLinkDTO struct {
 	ID   string `json:"id" validate:"max=30"`
-	Name string `json:"name" validate:"min=3,max=100"`
+	Name string `json:"name" validate:"max=100"`
 	Url  string `json:"url" validate:"required,url,max=5000"`
 }
 

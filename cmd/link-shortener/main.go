@@ -13,19 +13,23 @@ import (
 )
 
 func init() {
-	if err := godotenv.Load(".env"); err != nil {
-		log.Println("Error loading .env file")
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "" {
+		os.Setenv("APP_ENV", "development")
+		appEnv = "development"
 	}
 
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "production" {
-		if err := godotenv.Overload(".env.production"); err != nil {
-			log.Println("Error loading .env.production file")
-		}
+	if err := godotenv.Load(".env." + appEnv); err != nil {
+		log.Println("Error loading .env." + appEnv + " file")
+	}
+
+	if err := godotenv.Load(); err != nil {
+		log.Println("Error loading .env file")
 	}
 }
 
 func main() {
+	utils.InitLogger()
 	defer utils.Logger.Sync()
 
 	utils.Logger.Info("Starting the application...")

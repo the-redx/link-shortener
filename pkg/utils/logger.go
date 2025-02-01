@@ -17,7 +17,7 @@ func getLevelLogger(level string) zapcore.Level {
 	return zap.ErrorLevel
 }
 
-func init() {
+func InitLogger() {
 	appLogLevel := os.Getenv("APP_LOG_LEVEL")
 	appEnv := os.Getenv("APP_ENV")
 

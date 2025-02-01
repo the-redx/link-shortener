@@ -34,6 +34,10 @@ func (s *LinkService) GetAllLinks(ctx context.Context) (*[]domain.Link, *errs.Ap
 		return nil, errs.NewUnexpectedError("Error while fetching links")
 	}
 
+	for i := range links {
+		links[i].ShortUrl = createShortUrlFromID(links[i].ID)
+	}
+
 	logger.Debug("Response", zap.Any("links", links))
 	return &links, nil
 }
@@ -204,6 +208,8 @@ func (s *LinkService) getLinkByID(id string, ctx context.Context) (*domain.Link,
 		logger.Debug("Error while fetching link", zap.Error(err))
 		return nil, errs.NewUnexpectedError("Error while fetching link")
 	}
+
+	link.ShortUrl = createShortUrlFromID(link.ID)
 
 	logger.Debug("Link fetched", zap.Any("link", link))
 	return &link, nil
