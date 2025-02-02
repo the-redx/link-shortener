@@ -1,9 +1,9 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:eu-north-1:335130104086:task-definition/shortener-task-definition:2",
+    "taskDefinitionArn": "arn:aws:ecs:eu-north-1:335130104086:task-definition/shortener-task-definition:4",
     "containerDefinitions": [
         {
             "name": "shortener-container",
-            "image": "shortener",
+            "image": "335130104086.dkr.ecr.eu-north-1.amazonaws.com/shortener:latest",
             "cpu": 0,
             "portMappings": [
                 {
@@ -16,10 +16,8 @@
             ],
             "essential": true,
             "environment": [],
-            "environmentFiles": [],
             "mountPoints": [],
             "volumesFrom": [],
-            "ulimits": [],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
@@ -38,7 +36,7 @@
     "family": "shortener-task-definition",
     "executionRoleArn": "arn:aws:iam::335130104086:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 2,
+    "revision": 4,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -49,10 +47,16 @@
             "name": "ecs.capability.execution-role-awslogs"
         },
         {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
             "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
         },
         {
             "name": "com.amazonaws.ecs.capability.docker-remote-api.1.28"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
         },
         {
             "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
@@ -78,7 +82,7 @@
         "cpuArchitecture": "X86_64",
         "operatingSystemFamily": "LINUX"
     },
-    "registeredAt": "2025-02-02T17:33:22.605Z",
+    "registeredAt": "2025-02-02T18:04:40.107Z",
     "registeredBy": "arn:aws:iam::335130104086:root",
     "tags": []
 }
