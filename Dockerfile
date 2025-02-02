@@ -5,6 +5,7 @@ WORKDIR /app
 COPY go.mod /app
 COPY go.sum /app
 COPY .env /app
+COPY .env.production /app
 RUN go mod download
 
 COPY . /app
@@ -16,6 +17,9 @@ FROM golang:1.22.0 AS prod
 WORKDIR /app
 COPY --from=build /app/shortener /app
 COPY --from=build /app/.env /app
+COPY --from=build /app/.env.production /app
+
+ENV APP_ENV=production
 
 EXPOSE 4000
 

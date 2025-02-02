@@ -22,12 +22,14 @@ func init() {
 		appEnv = "development"
 	}
 
+	log.Println("App env: ", appEnv)
+
 	if err := godotenv.Load(".env." + appEnv); err != nil {
-		log.Println("Error loading .env." + appEnv + " file")
+		log.Panicln("Error loading .env." + appEnv + " file")
 	}
 
 	if err := godotenv.Load(); err != nil {
-		log.Println("Error loading .env file")
+		log.Panicln("Error loading .env file")
 	}
 }
 

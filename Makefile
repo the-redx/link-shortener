@@ -16,5 +16,9 @@ build:
 build-and-run: build
 	./shortener
 
+docker-build-and-run:
+	docker build -t shortener .
+	docker run -p 8080:80 shortener
+
 run-dynamo:
 	docker run -p 8000:8000 amazon/dynamodb-local
