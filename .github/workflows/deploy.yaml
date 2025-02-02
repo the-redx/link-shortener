@@ -44,9 +44,7 @@ jobs:
       - name: Download task definition 
         id: download-task-def
         run: |
-          aws ecs describe-task-definition --task-definition shortener-task-definition > task-definition.json
-          echo $(ls -la)
-          echo $(cat task-definition.json)
+          aws ecs describe-task-definition --task-definition shortener-task-definition --query taskDefinition > task-definition.json
 
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: update-task-def
