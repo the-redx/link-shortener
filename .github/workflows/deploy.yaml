@@ -42,11 +42,14 @@ jobs:
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Download task definition 
+        id: download-task-def
         run: |
           aws ecs describe-task-definition --task-definition shortener-task-definition > task-definition.json
+          echo $(ls -la)
+          echo $(cat task-definition.json)
 
       - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
+        id: update-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
@@ -56,6 +59,6 @@ jobs:
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          task-definition: ${{ steps.update-task-def-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
