@@ -1,17 +1,17 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:eu-north-1:335130104086:task-definition/deploy-shortener:1",
+    "taskDefinitionArn": "arn:aws:ecs:eu-north-1:335130104086:task-definition/shortener-task-definition:2",
     "containerDefinitions": [
         {
-            "name": "shortener",
+            "name": "shortener-container",
             "image": "shortener",
             "cpu": 0,
             "portMappings": [
                 {
-                    "name": "shortener-80-tcp",
-                    "containerPort": 80,
-                    "hostPort": 80,
+                    "name": "shortener-container-4000-tcp",
+                    "containerPort": 4000,
+                    "hostPort": 4000,
                     "protocol": "tcp",
-                    "appProtocol": "http"
+                    "appProtocol": "http2"
                 }
             ],
             "essential": true,
@@ -23,7 +23,7 @@
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/deploy-shortener",
+                    "awslogs-group": "/ecs/shortener-task-definition",
                     "mode": "non-blocking",
                     "awslogs-create-group": "true",
                     "max-buffer-size": "25m",
@@ -35,10 +35,10 @@
             "systemControls": []
         }
     ],
-    "family": "deploy-shortener",
+    "family": "shortener-task-definition",
     "executionRoleArn": "arn:aws:iam::335130104086:role/ecsTaskExecutionRole",
     "networkMode": "awsvpc",
-    "revision": 1,
+    "revision": 2,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -78,7 +78,7 @@
         "cpuArchitecture": "X86_64",
         "operatingSystemFamily": "LINUX"
     },
-    "registeredAt": "2025-02-02T16:38:17.167Z",
+    "registeredAt": "2025-02-02T17:33:22.605Z",
     "registeredBy": "arn:aws:iam::335130104086:root",
     "enableFaultInjection": false,
     "tags": []
