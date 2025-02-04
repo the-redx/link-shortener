@@ -23,7 +23,9 @@ func (ch *LinkHandler) RedirectToLink(w http.ResponseWriter, r *http.Request) {
 
 	link, appErr := ch.service.GetLinkByIDForRedirect(linkId, r.Context())
 	if appErr != nil {
-		writeError(w, appErr)
+		// Redirect to the main page
+		http.Redirect(w, r, "https://illiashenko.dev/link-shortener", http.StatusTemporaryRedirect)
+		// writeError(w, appErr)
 		return
 	}
 

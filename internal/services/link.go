@@ -45,7 +45,7 @@ func (s *LinkService) GetLinkByID(id string, ctx context.Context) (*domain.Link,
 	userId, ok := ctx.Value("UserID").(string)
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	link, appErr := s.getLinkByID(id, ctx)
+	link, appErr := s.getLinkByID(id, userId, ctx)
 	if appErr != nil {
 		return nil, appErr
 	}
@@ -61,11 +61,20 @@ func (s *LinkService) GetLinkByID(id string, ctx context.Context) (*domain.Link,
 func (s *LinkService) GetLinkByIDForRedirect(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	link, appErr := s.getLinkByID(id, ctx)
-	if appErr != nil {
-		return nil, appErr
+	logger.Debugf("Fetching link by ID: %s", id)
+
+	var links []domain.Link
+	if err := s.linksTable.Scan().Filter("'ID' = ? AND 'Status' = ?", id, "active").All(context.TODO(), &links); err != nil {
+		logger.Debug("Error while fetching links", zap.Error(err))
+		return nil, errs.NewUnexpectedError("Error while fetching link")
 	}
 
+	if len(links) == 0 {
+		logger.Debug("Link not found. Slice length is 0")
+		return nil, errs.NewNotFoundError("Link not found")
+	}
+
+	link := &links[0]
 	logger.Debugf("Link status: %s", link.Status)
 
 	if link.Status != domain.Active {
@@ -134,7 +143,7 @@ func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO, c
 	userId := ctx.Value("UserID").(string)
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	link, appErr := s.getLinkByID(id, ctx)
+	link, appErr := s.getLinkByID(id, userId, ctx)
 	if appErr != nil {
 		return nil, appErr
 	}
@@ -156,14 +165,14 @@ func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO, c
 
 	logger.Debug("Link to update", zap.Any("link", link))
 
-	if err := s.linksTable.Update("ID", id).Set("Name", name).Set("Status", status).Set("DateUpdated", time.Now().UTC().Format(time.RFC3339)).Run(context.TODO()); err != nil {
+	if err := s.linksTable.Update("ID", id).Range("UserId", userId).Set("Name", name).Set("Status", status).Set("DateUpdated", time.Now().UTC().Format(time.RFC3339)).Run(context.TODO()); err != nil {
 		logger.Debug("Error while updating the link", zap.Error(err))
 		return nil, errs.NewUnexpectedError("Error while updating link")
 	}
 
 	logger.Debug("Link updated", zap.Any("link", link))
 
-	link, appErr = s.getLinkByID(id, ctx)
+	link, appErr = s.getLinkByID(id, userId, ctx)
 	if appErr != nil {
 		return nil, appErr
 	}
@@ -175,7 +184,7 @@ func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Li
 	userId := ctx.Value("UserID").(string)
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 
-	link, appErr := s.getLinkByID(id, ctx)
+	link, appErr := s.getLinkByID(id, userId, ctx)
 	if appErr != nil {
 		return nil, appErr
 	}
@@ -185,7 +194,7 @@ func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Li
 		return nil, errs.NewForbiddenError("You don't have access to this link")
 	}
 
-	if err := s.linksTable.Delete("ID", id).Run(context.TODO()); err != nil {
+	if err := s.linksTable.Delete("ID", id).Range("UserId", userId).Run(context.TODO()); err != nil {
 		logger.Debug("Error while deleting link", zap.Error(err))
 		return nil, errs.NewUnexpectedError("Error while deleting link")
 	}
@@ -194,11 +203,13 @@ func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Li
 	return link, nil
 }
 
-func (s *LinkService) getLinkByID(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
+func (s *LinkService) getLinkByID(id string, userId string, ctx context.Context) (*domain.Link, *errs.AppError) {
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
 	var link domain.Link
 
-	if err := s.linksTable.Get("ID", id).One(context.TODO(), &link); err != nil {
+	logger.Debugf("Fetching link by ID: %s and UserId: %s", id, userId)
+
+	if err := s.linksTable.Get("ID", id).Range("UserId", dynamo.Equal, userId).One(context.TODO(), &link); err != nil {
 		if err == dynamo.ErrNotFound {
 			logger.Debug("Link not found")
 			return nil, errs.NewNotFoundError("Link not found")

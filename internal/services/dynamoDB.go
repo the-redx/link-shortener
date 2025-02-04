@@ -14,8 +14,6 @@ func NewDynamoDBService() *dynamo.DB {
 	environment := os.Getenv("APP_ENV")
 	dynamoEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 
-	utils.Logger.Debugf("Creating DynamoDB config for %s environment. AWS_ACCESS_KEY_ID = %s, AWS_SECRET_ACCESS_KEY = %s", environment, os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"))
-
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("eu-north-1"))
 	if err != nil {
 		utils.Logger.Fatal("Error loading AWS config")

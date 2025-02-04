@@ -40,18 +40,19 @@ func main() {
 	utils.Logger.Info("Starting the application...")
 
 	linkService := services.NewLinkService()
+	rateLimiterService := services.NewRateLimiter(60, time.Minute*10)
 	ch := handlers.NewLinkHandler(linkService)
 
 	router := mux.NewRouter()
 
 	router.Use(handlers.LogMW)
 
-	router.HandleFunc("/links", handlers.AuthMW(ch.GetAllLinks)).Methods(http.MethodGet)
-	router.HandleFunc("/links/{link_id}", handlers.AuthMW(ch.GetLink)).Methods(http.MethodGet)
-	router.HandleFunc("/links", handlers.AuthMW(ch.CreateLink)).Methods(http.MethodPost)
-	router.HandleFunc("/links/{link_id}", handlers.AuthMW(ch.UpdateLink)).Methods(http.MethodPatch)
-	router.HandleFunc("/links/{link_id}", handlers.AuthMW(ch.DeleteLink)).Methods(http.MethodDelete)
-	router.HandleFunc("/{link_id}", ch.RedirectToLink).Methods(http.MethodGet)
+	router.HandleFunc("/links", handlers.AuthMW(handlers.RateLimitMW(ch.GetAllLinks, rateLimiterService))).Methods(http.MethodGet)
+	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.GetLink, rateLimiterService))).Methods(http.MethodGet)
+	router.HandleFunc("/links", handlers.AuthMW(handlers.RateLimitMW(ch.CreateLink, rateLimiterService))).Methods(http.MethodPost)
+	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.UpdateLink, rateLimiterService))).Methods(http.MethodPatch)
+	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.DeleteLink, rateLimiterService))).Methods(http.MethodDelete)
+	router.HandleFunc("/{link_id}", handlers.RateLimitMW(ch.RedirectToLink, rateLimiterService)).Methods(http.MethodGet)
 
 	utils.Logger.Fatal(http.ListenAndServe(":4000", router))
 }
