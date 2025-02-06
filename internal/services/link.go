@@ -83,7 +83,7 @@ func (s *LinkService) GetLinkByIDForRedirect(id string, ctx context.Context) (*d
 	}
 
 	// Increment the Redirects counter
-	if err := s.linksTable.Update("ID", id).Set("Redirects", link.Redirects+1).Run(context.TODO()); err != nil {
+	if err := s.linksTable.Update("ID", id).Range("UserId", link.UserId).Set("Redirects", link.Redirects+1).Run(context.TODO()); err != nil {
 		logger.Debug("Error while updating the link", zap.Error(err))
 	}
 
