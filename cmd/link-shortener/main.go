@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -12,7 +13,14 @@ import (
 	"github.com/the-redx/link-shortener/internal/services"
 	"github.com/the-redx/link-shortener/pkg/utils"
 	"golang.org/x/exp/rand"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aws-lambda-go-api-proxy/core"
+	"github.com/awslabs/aws-lambda-go-api-proxy/gorillamux"
 )
+
+var muxLambda *gorillamux.GorillaMuxAdapter
 
 func init() {
 	rand.Seed(uint64(time.Now().UnixNano()))
@@ -33,6 +41,12 @@ func init() {
 	if err := godotenv.Load(); err != nil {
 		log.Panicln("Error loading .env file")
 	}
+}
+
+func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	apiGatewayResponse, err := muxLambda.ProxyWithContext(ctx, *core.NewSwitchableAPIGatewayRequestV1(&req))
+
+	return *apiGatewayResponse.Version1(), err
 }
 
 func main() {
@@ -56,5 +70,15 @@ func main() {
 	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.DeleteLink, rateLimiterService))).Methods(http.MethodDelete)
 	router.HandleFunc("/{link_id}", handlers.RateLimitMW(ch.RedirectToLink, rateLimiterService)).Methods(http.MethodGet)
 
-	utils.Logger.Fatal(http.ListenAndServe(":4000", router))
+	responseClient := os.Getenv("RESPONSE_CLIENT")
+	if responseClient == "mux" {
+		utils.Logger.Info("Use mux as response client")
+		utils.Logger.Fatal(http.ListenAndServe(":4000", router))
+	} else if responseClient == "lambda" {
+		utils.Logger.Info("Use Lambda as response client")
+		muxLambda = gorillamux.New(router)
+		lambda.Start(Handler)
+	} else {
+		utils.Logger.Fatal("Please provide a valid response client")
+	}
 }
