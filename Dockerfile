@@ -19,8 +19,6 @@ COPY --from=build /app/shortener /app
 COPY --from=build /app/.env /app
 COPY --from=build /app/.env.production /app
 
-ENV APP_ENV=production
-
 EXPOSE 4000
 
 CMD ["/app/shortener"]
