@@ -1,7 +1,5 @@
 name: Deploy to AWS Fargate
-on:
-  push:
-    branches: ["main"]
+on: workflow_dispatch
 
 env:
   AWS_REGION: eu-north-1
