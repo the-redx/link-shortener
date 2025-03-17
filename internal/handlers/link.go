@@ -9,6 +9,7 @@ import (
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/internal/services"
 	"github.com/the-redx/link-shortener/pkg/errs"
+	"go.uber.org/zap"
 )
 
 type LinkHandler struct {
@@ -71,6 +72,30 @@ func (ch *LinkHandler) CreateLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newLink, appErr := ch.service.CreateLink(&link, r.Context())
+	if appErr != nil {
+		writeError(w, appErr)
+		return
+	}
+
+	writeResponse(w, http.StatusOK, newLink)
+}
+
+func (ch *LinkHandler) AttachFileToLink(w http.ResponseWriter, r *http.Request) {
+	// max total size 20mb
+	r.ParseMultipartForm(200 << 20)
+
+	vars := mux.Vars(r)
+	linkId := vars["link_id"]
+	logger := r.Context().Value("Logger").(*zap.SugaredLogger)
+
+	file, headers, err := r.FormFile("file")
+	if err != nil {
+		logger.Debugf("Error reading file from form data. Reason: %s", err.Error())
+		writeError(w, errs.NewBadRequestError("Unable to attach the file"))
+		return
+	}
+
+	newLink, appErr := ch.service.AttachFileToLinkByID(linkId, &file, headers, r.Context())
 	if appErr != nil {
 		writeError(w, appErr)
 		return

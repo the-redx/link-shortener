@@ -1,11 +1,17 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/guregu/dynamo/v2"
 	"github.com/the-redx/link-shortener/internal/domain"
 	"github.com/the-redx/link-shortener/pkg/errs"
@@ -15,6 +21,7 @@ import (
 
 type LinkService struct {
 	dynamoDB   *dynamo.DB
+	s3         *s3.Client
 	linksTable dynamo.Table
 }
 
@@ -180,6 +187,56 @@ func (s *LinkService) UpdateLinkByID(id string, linkDTO *domain.UpdateLinkDTO, c
 	return link, nil
 }
 
+func (s *LinkService) AttachFileToLinkByID(id string, file *multipart.File, headers *multipart.FileHeader, ctx context.Context) (*domain.Link, *errs.AppError) {
+	userId := ctx.Value("UserID").(string)
+	logger := ctx.Value("Logger").(*zap.SugaredLogger)
+
+	link, appErr := s.getLinkByID(id, userId, ctx)
+	if appErr != nil {
+		return nil, appErr
+	}
+
+	if link.UserId != userId {
+		logger.Debug("User is not a owner")
+		return nil, errs.NewForbiddenError("You don't have access to this link")
+	}
+
+	// Read the contents of the file into a buffer
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, *file); err != nil {
+		logger.Debugf("Unable to copy the file to the buffer: %s", err.Error())
+		return nil, errs.NewForbiddenError("Unable to attach the file")
+	}
+
+	// This uploads the contents of the buffer to S3
+	_, err := s.s3.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(LINK_ATTACHMENTS_BUCKET),
+		Key:    aws.String(headers.Filename),
+		Body:   bytes.NewReader(buf.Bytes()),
+	})
+	if err != nil {
+		logger.Debugf("Error when uploading the file to AWS S3: %s", err.Error())
+		return nil, errs.NewForbiddenError("Unable to attach the file")
+	}
+
+	awsS3Url := fmt.Sprintf("https://%s.amazonaws.com/%s/%s", "eu-north-1", LINK_ATTACHMENTS_BUCKET, headers.Filename)
+	logger.Debugf("Successfully uploaded the file to AWS S3. Output URL: %s", awsS3Url)
+
+	if err := s.linksTable.Update("ID", id).Range("UserId", userId).Set("Url", awsS3Url).Set("DateUpdated", time.Now().UTC().Format(time.RFC3339)).Run(context.TODO()); err != nil {
+		logger.Debug("Error while updating the link", zap.Error(err))
+		return nil, errs.NewUnexpectedError("Error while updating link")
+	}
+
+	logger.Debug("Link updated", zap.Any("link", link))
+
+	link, appErr = s.getLinkByID(id, userId, ctx)
+	if appErr != nil {
+		return nil, appErr
+	}
+
+	return link, nil
+}
+
 func (s *LinkService) DeleteLinkByID(id string, ctx context.Context) (*domain.Link, *errs.AppError) {
 	userId := ctx.Value("UserID").(string)
 	logger := ctx.Value("Logger").(*zap.SugaredLogger)
@@ -227,7 +284,8 @@ func (s *LinkService) getLinkByID(id string, userId string, ctx context.Context)
 
 func NewLinkService() LinkService {
 	dynamoDB := NewDynamoDBService()
+	s3 := NewS3Service()
 	table := GetOrCreateTable(dynamoDB, "Links", domain.Link{})
 
-	return LinkService{dynamoDB: dynamoDB, linksTable: table}
+	return LinkService{dynamoDB: dynamoDB, s3: s3, linksTable: table}
 }

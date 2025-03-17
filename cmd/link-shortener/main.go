@@ -67,6 +67,7 @@ func main() {
 	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.GetLink, rateLimiterService))).Methods(http.MethodGet)
 	router.HandleFunc("/links", handlers.AuthMW(handlers.RateLimitMW(ch.CreateLink, rateLimiterService))).Methods(http.MethodPost)
 	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.UpdateLink, rateLimiterService))).Methods(http.MethodPatch)
+	router.HandleFunc("/links/{link_id}/attachFile", handlers.AuthMW(handlers.RateLimitMW(ch.AttachFileToLink, rateLimiterService))).Methods(http.MethodPost)
 	router.HandleFunc("/links/{link_id}", handlers.AuthMW(handlers.RateLimitMW(ch.DeleteLink, rateLimiterService))).Methods(http.MethodDelete)
 	router.HandleFunc("/{link_id}", handlers.RateLimitMW(ch.RedirectToLink, rateLimiterService)).Methods(http.MethodGet)
 
