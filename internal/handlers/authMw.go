@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/the-redx/link-shortener/pkg/errs"
@@ -17,10 +18,11 @@ func AuthMW(next http.HandlerFunc) http.HandlerFunc {
 
 		userId := r.Header.Get("X-User-ID")
 		userId = strings.TrimSpace(userId)
+		myUserId := os.Getenv("MY_USERID")
 
 		logger.Debugf("Auth middleware: User ID: %s", userId)
 
-		if userId == "" {
+		if userId != myUserId {
 			logger.Debug("Authentication error")
 			writeError(w, errs.NewForbiddenError("Authentication error"))
 			return
